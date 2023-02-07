@@ -51,15 +51,18 @@ while true do
     fs_text("Idle")
     local _, _, _, old, new = event.pull("redstone_changed")
     if old == 0 and new > 0 then
+        fs_text("Starting!",0xFFAA00)
+        os.sleep(2)
         for k,v in ipairs(config.target) do
             if v:match("%a") then
                 fs_text(v)
                 ring.addSymbolToAddress(0,v)
             end
-            os.sleep(1)
+            os.sleep(0.5)
         end
         fs_text("Dialing",0x44FF66)
         ring.addSymbolToAddress(0,6)
+        event.pull(10,"transportrings_teleport_finished")
     end
 end
 
