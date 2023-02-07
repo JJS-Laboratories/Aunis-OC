@@ -29,7 +29,7 @@ local config = {}
 if not fs1.exists("/home/rs_ring.txt") then
     print("Config Mode..")
     print("Type of Ring? (GOAULD, ORI)")
-    config.type = io.read()
+    config.type = tonumber(io.read())
     if config.type == "GOAULD" then config.type = 0 end
     if config.type == "ORI" then config.type = 1 end
     print("Target Address?")
@@ -56,12 +56,12 @@ while true do
         for k,v in ipairs(config.target) do
             if v:match("%a") then
                 fs_text(v)
-                ring.addSymbolToAddress(0,v)
+                ring.addSymbolToAddress(config.type,v)
             end
             os.sleep(0.5)
         end
         fs_text("Dialing",0x44FF66)
-        ring.addSymbolToAddress(0,6)
+        ring.addSymbolToAddress(config.type,6)
         event.pull(10,"transportrings_teleport_finished")
     end
 end
