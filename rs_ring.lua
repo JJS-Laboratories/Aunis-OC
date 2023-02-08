@@ -47,23 +47,27 @@ else
     config_file:close()
 end
 
-while true do
-    fs_text("Idle")
-    local _, _, _, old, new = event.pull("redstone_changed")
-    if old == 0 and new > 0 then
-        fs_text("Starting!",0xFFAA00)
-        os.sleep(2)
-        for k,v in ipairs(config.target) do
-            if v:match("%a") then
-                fs_text(v)
-                ring.addSymbolToAddress(config.type,v)
+local stat, err = pcall(function()
+    while true do
+        fs_text("Idle")
+        local _, _, _, old, new = event.pull("redstone_changed")
+        if old == 0 and new > 0 then
+            fs_text("Starting!",0xFFAA00)
+            os.sleep(2)
+            for k,v in ipairs(config.target) do
+                if v:match("%a") then
+                    fs_text(v)
+                    ring.addSymbolToAddress(config.type,v)
+                end
+                os.sleep(0.5)
             end
-            os.sleep(0.5)
+            fs_text("Dialing",0x44FF66)
+            ring.addSymbolToAddress(config.type,6)
+            event.pull(10,"transportrings_teleport_finished")
         end
-        fs_text("Dialing",0x44FF66)
-        ring.addSymbolToAddress(config.type,6)
-        event.pull(10,"transportrings_teleport_finished")
     end
-end
+end)
+
+if not stat then component.gpu.setResolution(component.gpu.maxResolution()) print(err) end
 
 component.gpu.setResolution(component.gpu.maxResolution())
