@@ -175,3 +175,5 @@ end
 function nbt.encode(t)
 	return writeTag(t)
 end
+
+return nbt
