@@ -50,7 +50,89 @@ symbols_list = {
         {name="Lynx"},
         {name="Orion"},
         {name="Piscis Austrinus"}
-    }
+    },
+    pegasus={
+        {name="Danami"},
+        {name="Arami"},
+        {name="Setas"},
+        {name="Aldeni"},
+        {name="Aaxel"},
+        {name="Bydo"},
+        {name="Avoniv"},
+        {name="Ecrumig"},
+        {name="Laylox"},
+        {name="Ca Po"},
+        {name="Alura"},
+        {name="Lenchan"},
+        {name="Acjesis"},
+        {name="Dawnre"},
+        {name="Subido"}, -- origin
+        {name="Zamilloz"},
+        {name="Recktic"},
+        {name="Robandus"},
+        {name="Unknow1"},
+        {name="Zeo"},
+        {name="Tahnan"},
+        {name="Elenami"},
+        {name="Hamlinto"},
+        {name="Salma"},
+        {name="Abrin"},
+        {name="Poco Re"},
+        {name="Hacemill"},
+        {name="Olavii"},
+        {name="Ramnon"},
+        {name="Unknow2"},
+        {name="Gilltin"},
+        {name="Sibbron"},
+        {name="Amiwill"},
+        {name="Illume"},
+        {name="Sandovi"},
+        {name="Baselai"},
+        {name="Once El"},
+        {name="Roehi"},
+    },
+    universe={
+        {name="TOP_CHEVRON"},
+        {name="G1"},
+        {name="G2"},
+        {name="G3"},
+        {name="G4"},
+        {name="G5"},
+        {name="G6"},
+        {name="G7"},
+        {name="G8"},
+        {name="G9"},
+        {name="G10"},
+        {name="G11"},
+        {name="G12"},
+        {name="G13"},
+        {name="G14"},
+        {name="G15"},
+        {name="G16"},
+        {name="G17"},
+        {name="G18"},
+        {name="G19"},
+        {name="G20"},
+        {name="G21"},
+        {name="G22"},
+        {name="G23"},
+        {name="G24"},
+        {name="G25"},
+        {name="G26"},
+        {name="G27"},
+        {name="G28"},
+        {name="G29"},
+        {name="G30"},
+        {name="G31"},
+        {name="G32"},
+        {name="G33"},
+        {name="G34"},
+        {name="G35"},
+        {name="G36"},
+    },
+    milkway_origin="Point of Origin",
+    pegasus_origin="Subido",
+    universe_origin="TOP_CHEVRON"
 }
 
 if not fs1.exists("/lib/nbt_lib.lua") then
@@ -345,14 +427,24 @@ registerButton(9,1,19,3,"autodial",function(name)
     if stack then
         local dial_box = drawFancyBox(1,4,18,13,"double_all",nil,0x44AAFF)
         computer.beep(400,0.2)
-        local to_dial = {}
         
         local nbt_data = nbt.decode(zzlib.gunzip(stack.tag))
 
         local symbols = nbt_data.values[1].values
         local address = {}
+        local symbol_type = ""
 
         local write_line = 1
+
+        for k,v in ipairs(symbols) do
+            if v.value == 0 then
+                symbol_type = "milkyway"
+            elseif v.value == 1 then
+                symbol_type = "pegasus"
+            elseif v.value == 2 then
+                symbol_type = "universe"
+            end
+        end
 
         for k,v in ipairs(symbols) do
             if v.name:match("%d") then
@@ -363,7 +455,7 @@ registerButton(9,1,19,3,"autodial",function(name)
                 address[#address+1] = {
                     symbol=v.value,
                     pos=v.name:gsub("%D",""),
-                    name=symbols_list.milkyway[v.value+1].name
+                    name=symbols_list[symbol_type][v.value+1].name
                 }
                 write_line = write_line+1
                 os.sleep(0.25)
@@ -408,8 +500,8 @@ registerButton(9,1,19,3,"autodial",function(name)
 
             hideBox(chevr_box)
         end
-        local chevr_box = drawFancyBox(19,4,36,6,"double_hori_dot","Point of Origin",0x44AAFF)
-        sg.engageSymbol("Point of Origin")
+        local chevr_box = drawFancyBox(19,4,36,6,"double_hori_dot",symbols_list[symbol_type.."_origin"],0x44AAFF)
+        sg.engageSymbol(symbols_list[symbol_type.."_origin"])
         event.pull("stargate_spin_chevron_engaged")
         hideBox(chevr_box)
         local chevr_box = drawFancyBox(19,4,36,6,"double_hori_dot","Connecting",0x44AAFF)
