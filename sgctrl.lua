@@ -1,7 +1,6 @@
 local component = require("component")
 local sg = component.stargate
 local gpu = component.gpu
-local rs = component.redstone
 local term = require("term")
 local fs1 = require("filesystem")
 local srz = require("serialization")
@@ -10,7 +9,20 @@ local thread = require("thread")
 local computer = require("computer")
 local kb = require("keyboard")
 
-symbols_list = {
+local function debug_cb_msg(txt)
+    if component.isAvailable("chat_box") then
+        component.chat_box.setName("SG Ctrl Debug")
+        component.chat_box.say(txt)
+    end
+end
+
+local function speak(txt)
+    if component.isAvailable("speech_box") then
+        component.speech_box.say(txt)
+    end
+end
+
+local symbols_list = {
     milkyway = {
         {name="Sculptor"},
         {name="Scorpius"},
@@ -49,7 +61,8 @@ symbols_list = {
         {name="Capricornus"},
         {name="Lynx"},
         {name="Orion"},
-        {name="Piscis Austrinus"}
+        {name="Piscis Austrinus"},
+        origin="Point of Origin"
     },
     pegasus={
         {name="Danami"},
@@ -90,6 +103,7 @@ symbols_list = {
         {name="Baselai"},
         {name="Once El"},
         {name="Roehi"},
+        origin="Subido"
     },
     universe={
         {name="TOP_CHEVRON"},
@@ -129,10 +143,8 @@ symbols_list = {
         {name="G34"},
         {name="G35"},
         {name="G36"},
+        origin="G17"
     },
-    milkway_origin="Point of Origin",
-    pegasus_origin="Subido",
-    universe_origin="TOP_CHEVRON"
 }
 
 if not fs1.exists("/lib/nbt_lib.lua") then
@@ -159,6 +171,51 @@ if not fs1.exists("/lib/zzlib.lua") then
         error("Unable to download zzlib.lua")
     else
         print("Downloaded zzlib.lua")
+    end
+end
+
+local function symbol_to_id(type,symbol)
+    for k,v in ipairs(symbols_list[type]) do
+        if v.name:lower() == symbol:lower() then
+            return k
+        end
+    end
+    return nil
+end
+
+local function getData(key)
+    if fs1.exists("/home/sgctrl_data.txt") then
+        local file = io.open("/home/sgctrl_data.txt","r")
+        local data = srz.unserialize(file:read("*a"))
+        file:close()
+
+        return data[key] or nil
+    else
+        return nil
+    end
+end
+
+local function setData(key,value)
+    if fs1.exists("/home/sgctrl_data.txt") then
+        local file = io.open("/home/sgctrl_data.txt","r")
+        local data = srz.unserialize(file:read("*a"))
+        file:close()
+
+        data[key] = value
+
+        local file_w = io.open("/home/sgctrl_data.txt","w")
+        file_w:write(srz.serialize(data))
+        file_w:close()
+
+        return true
+    else
+        local new_data = {}
+
+        new_data[key] = value
+
+        local file_w = io.open("/home/sgctrl_data.txt","w")
+        file_w:write(srz.serialize(new_data))
+        file_w:close()
     end
 end
 
@@ -352,7 +409,28 @@ local function drawFancyBox(x,y,x1,y1,boxType,txt,fg,bg,hollow)
     }
 end
 
-local clickListener = thread.create(function()
+local function quickWrite(x,y,txt,fg,bg,clearLength)
+    local old_fg = gpu.getForeground()
+    local old_bg = gpu.getBackground()
+
+    gpu.setForeground(fg or old_fg)
+    gpu.setBackground(bg or old_bg)
+
+    if clearLength then
+        term.setCursor(x,y)
+        term.write(string.rep(" ",clearLength))
+    end
+
+    term.setCursor(x,y)
+    term.write(txt)
+
+    gpu.setForeground(old_fg)
+    gpu.setBackground(old_bg)
+end
+
+local threads = {}
+
+threads.clickListener = thread.create(function()
     while true do
         local _, _, clickX, clickY, btn, player = event.pull("touch")
         local btn, name = checkButton(clickX,clickY)
@@ -363,19 +441,130 @@ local clickListener = thread.create(function()
     end
 end)
 
+threads.gateOpening = thread.create(function()
+    while true do
+        local _, _, _, isOutgoing = event.pull("stargate_open")
+        local connect_box
+        if isOutgoing then
+            speak("Warning! Outgoing star gate connection!")
+            connect_box = drawFancyBox(1,finalY-2,40,finalY,"double_all","Outgoing: "..table.concat(getData("last_address"),"-"),0x44AAFF)
+        else
+            speak("Warning! Incoming star gate connection!")
+            connect_box = drawFancyBox(1,finalY-2,40,finalY,"double_all","Incoming!",0xFF2222)
+        end
+        event.pull("stargate_wormhole_closed_fully")
+        hideBox(connect_box)
+
+        speak("Star gate connection lost.")
+    end
+end)
+
+threads.failedListener = thread.create(function()
+    while true do
+        local _, _, _, reason = event.pull("stargate_failed")
+
+        local err_box = drawFancyBox(1,14,31,16,"double_hori_dot",reason,0xFF6666)
+        computer.beep(300,0.5)
+        os.sleep(2)
+
+        hideBox(err_box)
+    end
+end)
+
+registerButton(finalX-2,1,finalX,3,"power",function(name)
+    local box = drawFancyBox(finalX-9,1+3,finalX,5+3,"double_hori_dot",nil,0xFF6666)
+    quickWrite(box.x+1,box.y+1,"Shutdown",0xFF8888)
+    quickWrite(box.x+1,box.y+2,"Reboot",0xFF8888)
+    quickWrite(box.x+1,box.y+3,"Exit",0xFF8888)
+    local _, _, clickX, clickY, btn, player = event.pull("touch")
+
+    if clickX >= box.x and clickX <= box.x1 and clickY > box.y and clickY < box.y1 then
+        if clickY == box.y+1 then
+            computer.shutdown()
+        elseif clickY == box.y+2 then
+            computer.shutdown(true)
+        elseif clickY == box.y+3 then
+            for k,v in pairs(threads) do
+                v:kill()
+            end
+            gpu.setBackground(0x000000)
+            gpu.setForeground(0xFFFFFF)
+            gpu.setResolution(screenX,screenY)
+            gpu.fill(1,1,screenX,screenY," ")
+            term.setCursor(1,1)
+            return
+        end
+    else
+        hideBox(box)
+    end
+end)
+drawFancyBox(finalX-2,1,finalX,3,"double_hori_dot","X",0xFF4444)
+
 registerButton(1,1,8,3,"dial",function(name)
     local dial_box = drawFancyBox(1,4,18,13,"double_all",nil,0x44AAFF)
+    local tip_box = drawFancyBox(19,7,36,13,"double_hori_dot",nil,0x44AAFF)
+
+    local tip_list = {
+        "cancel",
+        "last"
+    }
+
+    for k,v in ipairs(tip_list) do
+        quickWrite(tip_box.x+1, tip_box.y+k, v, 0x0088DD,base_background)
+    end
+
+    local symbol_type = sg.getGateType():lower()
+
     computer.beep(400,0.2)
     local to_dial = {}
-    for i1=1, 6 do
+
+    local outcoming_address = {}
+    local freeze_last_address = false
+
+    for i1=1, 8 do
         local input_box = drawFancyBox(19,4,36,6,"double_hori_dot")
         term.setCursor(input_box.x+1,input_box.y+1)
-        to_dial[#to_dial+1] = inputBox(16,filter.alphabet,true,0xDDEEFF)
+        gpu.fill(dial_box.x+1,dial_box.y+i1,1,1,">")
+        local input = inputBox(16,filter.alphabet,true,0xDDEEFF)
+        if input == "cancel" then
+            hideBox(input_box)
+            hideBox(dial_box)
+            hideBox(tip_box)
+            return
+        end
+        if input == "last" then
+            speak("Dialing last address.")
+            freeze_last_address = true
+            gpu.fill(dial_box.x+1,dial_box.y+1,1,8,">")
+            hideBox(input_box)
+            for i1=1, 8 do
+                local last_address = getData("last_address")
+                to_dial[#to_dial+1] = symbols_list[symbol_type][last_address[i1]+1].name
+                outcoming_address[#outcoming_address+1] = last_address[i1]
+                term.setCursor(input_box.x+1,input_box.y+1)
+                term.setCursor(dial_box.x+1,dial_box.y+i1)
+                gpu.setForeground(dial_box.fg)
+                gpu.setBackground(dial_box.bg)
+                term.write(to_dial[#to_dial])
+            end
+            break
+        end
+        to_dial[#to_dial+1] = input
+        outcoming_address[#outcoming_address+1] = symbol_to_id(input)
         hideBox(input_box)
         term.setCursor(dial_box.x+1,dial_box.y+i1)
         gpu.setForeground(dial_box.fg)
         gpu.setBackground(dial_box.bg)
         term.write(to_dial[#to_dial])
+    end
+
+    hideBox(tip_box)
+
+    debug_cb_msg("dial: "..table.concat(outcoming_address,"-"))
+
+    if not freeze_last_address then
+        setData("last_address",outcoming_address)
+        speak("Dialing input address.")
     end
 
     for k,v in ipairs(to_dial) do
@@ -390,7 +579,9 @@ registerButton(1,1,8,3,"dial",function(name)
             term.write(v)
 
             sg.engageSymbol(v)
-            event.pull("stargate_spin_chevron_engaged")
+            debug_cb_msg("Engaging "..v)
+            os.sleep(0.5)
+            event.pull(15,"stargate_spin_chevron_engaged")
 
             term.setCursor(dial_box.x+1,dial_box.y+k)
             gpu.setForeground(0xDDEEFF)
@@ -405,13 +596,15 @@ registerButton(1,1,8,3,"dial",function(name)
     end
 
     if to_dial[1]:match("%a") then
-        local chevr_box = drawFancyBox(19,4,36,6,"double_hori_dot","Point of Origin",0x44AAFF)
+        local chevr_box = drawFancyBox(19,4,36,6,"double_hori_dot",symbols_list[symbol_type].origin,0x44AAFF)
 
-        sg.engageSymbol("Point of Origin")
-        event.pull("stargate_spin_chevron_engaged")
+        sg.engageSymbol(symbols_list[symbol_type].origin)
+        event.pull(20,"stargate_spin_chevron_engaged")
 
         hideBox(chevr_box)
         local chevr_box = drawFancyBox(19,4,36,6,"double_hori_dot","Connecting",0x44AAFF)
+
+        os.sleep(1)
 
         sg.engageGate()
         event.pull(8,"stargate_wormhole_stabilized")
@@ -420,13 +613,15 @@ registerButton(1,1,8,3,"dial",function(name)
     end
     hideBox(dial_box)
 end)
-drawFancyBox(1,1,8,3,"double_all","Dial")
+drawFancyBox(1,1,8,3,"double_all","Dial",0x44AAFF)
 
 registerButton(9,1,19,3,"autodial",function(name)
     local stack = inv.getStackInSlot(1,1)
     if stack then
         local dial_box = drawFancyBox(1,4,18,13,"double_all",nil,0x44AAFF)
         computer.beep(400,0.2)
+
+        speak("Auto dial activated.")
         
         local nbt_data = nbt.decode(zzlib.gunzip(stack.tag))
 
@@ -434,17 +629,26 @@ registerButton(9,1,19,3,"autodial",function(name)
         local address = {}
         local symbol_type = ""
 
+        local has_upgrade = (nbt_data.values[5].value == 1)
+
         local write_line = 1
 
         for k,v in ipairs(symbols) do
-            if v.value == 0 then
-                symbol_type = "milkyway"
-            elseif v.value == 1 then
-                symbol_type = "pegasus"
-            elseif v.value == 2 then
-                symbol_type = "universe"
-            end
+            if v.name == "symbolType" then
+                if v.value == 0 then
+                    symbol_type = "milkyway"
+                elseif v.value == 1 then
+                    symbol_type = "pegasus"
+                elseif v.value == 2 then
+                    symbol_type = "universe"
+                end
+                break
+            end 
         end
+
+        local type_box = drawFancyBox(19,7,36,9,"double_hori_dot",symbol_type,0x44AAFF)
+
+        local outcoming_address = {}
 
         for k,v in ipairs(symbols) do
             if v.name:match("%d") then
@@ -462,6 +666,8 @@ registerButton(9,1,19,3,"autodial",function(name)
             end
         end
 
+        
+
         local function address_sort(a,b)
             if tonumber(a.pos) < tonumber(b.pos) then return true end
         end
@@ -476,7 +682,30 @@ registerButton(9,1,19,3,"autodial",function(name)
             term.setCursor(dial_box.x+1,dial_box.y+k)
             term.write(v.name)
             os.sleep(0.125)
+            outcoming_address[#outcoming_address+1] = v.symbol
         end
+
+        if not has_upgrade then
+            gpu.setBackground(dial_box.bg)
+            gpu.setForeground(0x0066BB)
+
+            term.setCursor(dial_box.x+1,dial_box.y+7)
+            term.write(string.rep(" ",16))
+            term.setCursor(dial_box.x+1,dial_box.y+7)
+            term.write(address[7].name)
+
+            term.setCursor(dial_box.x+1,dial_box.y+8)
+            term.write(string.rep(" ",16))
+            term.setCursor(dial_box.x+1,dial_box.y+8)
+            term.write(address[8].name)
+
+            address[#address] = nil
+            address[#address] = nil
+        end
+
+        debug_cb_msg("autodial: "..table.concat(outcoming_address,"-"))
+        setData("last_address",outcoming_address)
+        speak("Calling auto dial address.")
 
         for k,v in ipairs(address) do
             local chevr_box = drawFancyBox(19,4,36,6,"double_hori_dot",v.name,0x44AAFF)
@@ -489,7 +718,9 @@ registerButton(9,1,19,3,"autodial",function(name)
             term.write(v.name)
 
             sg.engageSymbol(v.name)
-            event.pull("stargate_spin_chevron_engaged")
+            debug_cb_msg("Engaging "..v.symbol.." / "..v.name)
+            os.sleep(0.5)
+            event.pull(15,"stargate_spin_chevron_engaged")
 
             term.setCursor(dial_box.x+1,dial_box.y+k)
             gpu.setForeground(0xDDEEFF)
@@ -500,18 +731,25 @@ registerButton(9,1,19,3,"autodial",function(name)
 
             hideBox(chevr_box)
         end
-        local chevr_box = drawFancyBox(19,4,36,6,"double_hori_dot",symbols_list[symbol_type.."_origin"],0x44AAFF)
-        sg.engageSymbol(symbols_list[symbol_type.."_origin"])
-        event.pull("stargate_spin_chevron_engaged")
+        local chevr_box = drawFancyBox(19,4,36,6,"double_hori_dot",symbols_list[symbol_type].origin,0x44AAFF)
+
+        sg.engageSymbol(symbols_list[symbol_type].origin)
+        event.pull(20,"stargate_spin_chevron_engaged")
         hideBox(chevr_box)
-        local chevr_box = drawFancyBox(19,4,36,6,"double_hori_dot","Connecting",0x44AAFF)
+
+        os.sleep(1)
+        
         sg.engageGate()
+
+        chevr_box = drawFancyBox(19,4,36,6,"double_hori_dot","Connecting",0x44AAFF)
         event.pull(8,"stargate_wormhole_stabilized")
+
         hideBox(chevr_box)
         hideBox(dial_box)
+        hideBox(type_box)
     end
 end)
-drawFancyBox(9,1,19,3,"double_all","Auto Dial")
+drawFancyBox(9,1,19,3,"double_all","Auto Dial",0x44AAFF)
 
 registerButton(20,1,26,3,"close",function(name)
     local stat, err, desc = sg.disengageGate()
