@@ -174,6 +174,26 @@ if not fs1.exists("/lib/zzlib.lua") then
     end
 end
 
+local gates_lib = {}
+
+if not fs1.exists("/home/sgctrl_lib.txt") then
+    local file = io.open("/home/sgctrl_lib.txt","w")
+    file:write(srz.serialize({}))
+    file:close()
+
+    gates_lib = {}
+else
+    local file = io.open("/home/sgctrl_lib.txt","r")
+    gates_lib = srz.unserialize(file:read("*a"))
+    file:close()
+end
+
+local function save_gates_lib()
+    local file = io.open("/home/sgctrl_lib.txt","w")
+    file:write(srz.serialize(gates_lib))
+    file:close()
+end
+
 local function symbol_to_id(type,symbol)
     for k,v in ipairs(symbols_list[type]) do
         if v.name:lower() == symbol:lower() then
@@ -219,6 +239,19 @@ local function setData(key,value)
     end
 end
 
+local function checkClick(x,y,pos,equal)
+    if equal == nil or equal == true then
+        if x >= pos.x and x <= pos.x1 and y >= pos.y and y <= pos.y1 then
+            return true
+        end
+    elseif equal == true then
+        if x > pos.x and x < pos.x1 and y > pos.y and y < pos.y1 then
+            return true
+        end
+   end
+   return false
+end
+
 local zzlib = require("zzlib")
 local nbt = require("nbt_lib")
 local inv = component.inventory_controller
@@ -238,6 +271,15 @@ local filter = {
     alphabet = function(x)
         if (x <= kb.keys.p and x >= kb.keys.q) or (x <= kb.keys.l and x >= kb.keys.a) or (x <= kb.keys.m and x >= kb.keys.z) then
             return true
+        else
+            return false
+        end
+    end,
+    alphanumeric = function(x)
+        if (x <= kb.keys.p and x >= kb.keys.q) or (x <= kb.keys.l and x >= kb.keys.a) or (x <= kb.keys.m and x >= kb.keys.z) or (x >= kb.keys["1"] and x <= kb.keys["0"]) then
+            return true
+        elseif kb.keys[x] ~= nil and string.sub(kb.keys[x],1,6) == "numpad" and string.sub(kb.keys[x],7,7):match("%d") then
+            return true, string.sub(kb.keys[x],7,7)
         else
             return false
         end
@@ -326,8 +368,14 @@ local function inputBox(length,filter,allowSpace,fg,bg)
     while true do
         local _, _, char, code, ply = event.pull("key_down")
 
-        if filter(code) and text:len() < length then
-            text = text..(kb.keys[code])
+        local filter_res, filter_output = filter(code)
+
+        if filter_res and text:len() < length then
+            if filter_output then
+                text = text..filter_output
+            else
+                text = text..(kb.keys[code])
+            end
         elseif (code == kb.keys.space and allowSpace) then
             text = text.." "
         elseif code == kb.keys.back then
@@ -523,15 +571,11 @@ registerButton(1,1,8,3,"dial",function(name)
 
     for i1=1, 8 do
         local input_box = drawFancyBox(19,4,36,6,"double_hori_dot")
+        quickWrite(input_box.x+1, input_box.y, "Input", 0x44AAFF)
         term.setCursor(input_box.x+1,input_box.y+1)
         gpu.fill(dial_box.x+1,dial_box.y+i1,1,1,">")
-        local input = inputBox(16,filter.alphabet,true,0xDDEEFF)
-        if input == "cancel" then
-            hideBox(input_box)
-            hideBox(dial_box)
-            hideBox(tip_box)
-            return
-        end
+        local input = inputBox(16,filter.alphanumeric,true,0xDDEEFF)
+        
         if input == "last" then
             speak("Dialing last address.")
             freeze_last_address = true
@@ -548,9 +592,15 @@ registerButton(1,1,8,3,"dial",function(name)
                 term.write(to_dial[#to_dial])
             end
             break
+        elseif input == "cancel" or not symbol_to_id(symbol_type,input) then
+            hideBox(input_box)
+            hideBox(dial_box)
+            hideBox(tip_box)
+            return
         end
+        
         to_dial[#to_dial+1] = input
-        outcoming_address[#outcoming_address+1] = symbol_to_id(input)
+        outcoming_address[#outcoming_address+1] = symbol_to_id(symbol_type,input)
         hideBox(input_box)
         term.setCursor(dial_box.x+1,dial_box.y+i1)
         gpu.setForeground(dial_box.fg)
@@ -791,3 +841,345 @@ registerButton(27,1,32,3,"engage",function(name)
 end)
 drawFancyBox(27,1,32,3,"double_all","Open",0x66FF66)
 
+registerButton(36,1,44,3,"library",function(name)
+    local lib_box = drawFancyBox(1,4,25,11,"double_vert",nil,0x44AAFF)
+    local buttons = {
+        exit={
+            txt = "X",
+            x = lib_box.x+1,
+            y = lib_box.y,
+            x1 = lib_box.x+1,
+            y1 = lib_box.y,
+            color = 0xFF0000
+        },
+        add={
+            txt = "Add",
+            x = lib_box.x+1,
+            y = lib_box.y1-1,
+            x1 = lib_box.x+3,
+            y1 = lib_box.y1-1,
+            color = 0x66FF66
+        },
+        edit={
+            txt = "Edit",
+            x = lib_box.x+5,
+            y = lib_box.y1-1,
+            x1 = lib_box.x+8,
+            y1 = lib_box.y1-1,
+            color = 0xFF8822
+        },
+        del={
+            txt = "Del",
+            x = lib_box.x1-9,
+            y = lib_box.y1-1,
+            x1 = lib_box.x1-6,
+            y1 = lib_box.y1-1,
+            color = 0xFF4444
+        },
+        dial={
+            txt = "Dial",
+            x = lib_box.x1-5,
+            y = lib_box.y1-1,
+            x1 = lib_box.x1-2,
+            y1 = lib_box.y1-1,
+            color = 0xDDEEFF
+        }
+    }
+
+    quickWrite(buttons.exit.x, buttons.exit.y, buttons.exit.txt, buttons.exit.color)
+
+    quickWrite(buttons.add.x, buttons.add.y, buttons.add.txt, buttons.add.color)
+    quickWrite(buttons.edit.x, buttons.edit.y, buttons.edit.txt, buttons.edit.color)
+    quickWrite(buttons.del.x, buttons.del.y, buttons.del.txt, buttons.del.color)
+    quickWrite(buttons.dial.x, buttons.dial.y, buttons.dial.txt, buttons.dial.color)
+
+    local scroll_pos = 0
+
+    if gates_lib[scroll_pos+1] ~= nil then
+        quickWrite(lib_box.x+1, lib_box.y+2, gates_lib[scroll_pos+1].name or "Empty", 0xDDEEFF, 0x001122, 23)
+    else
+        quickWrite(lib_box.x+1, lib_box.y+2, "Empty", 0xDDEEFF, 0x001122, 23)
+    end
+
+    while true do
+        local event_dat = {event.pull()}
+        if event_dat[1] == "scroll" then
+            if event_dat[5] < 0 then -- Scrolling Downward
+                if scroll_pos >= #gates_lib-1 then
+                    scroll_pos = 0
+                else
+                    scroll_pos = scroll_pos+1
+                end
+            elseif event_dat[5] > 0 then -- Scrolling Upward
+                if scroll_pos > 0 then
+                    scroll_pos = scroll_pos-1
+                elseif scroll_pos <= 0 then
+                    scroll_pos = #gates_lib-1
+                end
+            end
+
+            if gates_lib[scroll_pos+1] ~= nil then
+                quickWrite(lib_box.x+1, lib_box.y+2, gates_lib[scroll_pos+1].name or "Empty", 0xDDEEFF, 0x001122, 23)
+            else
+                quickWrite(lib_box.x+1, lib_box.y+2, "Empty", 0xDDEEFF, 0x001122, 23)
+            end
+        end
+
+        if event_dat[1] == "touch" then
+            if checkClick(event_dat[3], event_dat[4],buttons.add) then
+                local choice_box = drawFancyBox(1,12,27,14,"double_hori_dot","1. Manual 2. Last 3. Auto",0x44AAFF)
+                local _, _, _, code = event.pull("key_up")
+                hideBox(choice_box)
+                if code == kb.keys["numpad1"] or code == kb.keys["1"] then
+                    local choice_box2 = drawFancyBox(1,12,24,14,"double_hori_dot","1. Code 2. Symbol Name",0x44AAFF)
+                    local _, _, _, in_type = event.pull("key_up")
+                    hideBox(choice_box2)
+
+                    local input_type
+                    if in_type == kb.keys["numpad1"] or in_type == kb.keys["1"] then
+                        input_type = "code"
+                    elseif in_type == kb.keys["numpad2"] or in_type == kb.keys["2"] then
+                        input_type = "name"
+                    end
+
+
+                    local choice_box3 = drawFancyBox(1,12,27,14,"double_hori_dot","1. 6 Symbols 2. 8 Symbols",0x44AAFF)
+                    local _, _, _, length = event.pull("key_up")
+                    hideBox(choice_box3)
+
+                    local input_len
+                    if length == kb.keys["numpad1"] or length == kb.keys["1"] then
+                        input_len = 6
+                    else
+                        input_len = 8
+                    end
+
+                    local symbols_box = drawFancyBox(1,15,18,24,"double_hori_dot",nil,0x44AAFF)
+
+                    local new_address = {}
+
+                    local symbol_type = sg.getGateType():lower()
+
+                    local cancel = false
+
+                    debug_cb_msg(tostring(input_len))
+
+                    for i1=1, tonumber(input_len) do
+                        local input_box = drawFancyBox(1,12,25,14,"double_hori_dot",nil,0x44AAFF)
+                        quickWrite(input_box.x+1, input_box.y, "Symbol "..input_type, 0x44AAFF)
+                        term.setCursor(input_box.x+1,input_box.y+1)
+                        gpu.fill(symbols_box.x+1,symbols_box.y+i1,1,1,">")
+                        local input = inputBox(16,filter.alphanumeric,true,0xDDEEFF)
+
+                        if input == "cancel" or (not symbol_to_id(symbol_type,input) and input_type == "name") then
+                            hideBox(input_box)
+                            hideBox(symbols_box)
+                            cancel = true
+                            break
+                        end
+
+                        debug_cb_msg(input)
+                        debug_cb_msg(tostring(tonumber(input)))
+                        
+                        if input_type == "code" then
+                            new_address[#new_address+1] = tonumber(input)
+                            hideBox(input_box)
+                            term.setCursor(symbols_box.x+1,symbols_box.y+i1)
+                            gpu.setForeground(symbols_box.fg)
+                            gpu.setBackground(symbols_box.bg)
+                            term.write(symbols_list[symbol_type][new_address[#new_address]+1].name)
+                        elseif input_type == "name" then
+                            new_address[#new_address+1] = symbol_to_id(symbol_type, input)
+                            hideBox(input_box)
+                            term.setCursor(symbols_box.x+1,symbols_box.y+i1)
+                            gpu.setForeground(symbols_box.fg)
+                            gpu.setBackground(symbols_box.bg)
+                            term.write(symbols_list[symbol_type][new_address[#new_address]].name)
+                        end
+                    end
+
+                    hideBox(symbols_box)
+
+                    if not cancel then
+                        local name_box = drawFancyBox(1,12,25,14,"double_hori_dot",nil,0x44AAFF)
+                        quickWrite(name_box.x+1, name_box.y, "New Name", 0x44AAFF)
+                        term.setCursor(name_box.x+1, name_box.y+1)
+                        local new_name = inputBox(23, filter.alphanumeric, true, 0xDDEEFF, base_background)
+
+                        gates_lib[#gates_lib+1] = {
+                            address = new_address,
+                            name = new_name
+                        }
+
+                        save_gates_lib()
+
+                        hideBox(name_box)
+                        scroll_pos = #gates_lib
+                    end
+                elseif code == kb.keys["numpad2"] or code == kb.keys["2"] then
+                    local last_address = getData("last_address")
+                    if #last_address == 8 or #last_address == 6 then
+                        local input_box = drawFancyBox(1,12,25,14,"double_hori_dot",nil,0x44AAFF)
+                        quickWrite(input_box.x+1, input_box.y, "New Name", 0x44AAFF)
+                        term.setCursor(input_box.x+1, input_box.y+1)
+                        local new_name = inputBox(23, filter.alphanumeric, true, 0xDDEEFF, base_background)
+
+                        gates_lib[#gates_lib+1] = {
+                            address = last_address,
+                            name = new_name
+                        }
+
+                        save_gates_lib()
+
+                        hideBox(input_box)
+                        scroll_pos = #gates_lib
+                    end
+                elseif code == kb.keys["numpad3"] or code == kb.keys["3"] then
+
+                    local stack = inv.getStackInSlot(1,1)
+                    if stack then
+                        local dial_box = drawFancyBox(1,15,18,24,"double_all",nil,0x44AAFF)
+                        computer.beep(400,0.2)
+                        
+                        local nbt_data = nbt.decode(zzlib.gunzip(stack.tag))
+
+                        local symbols = nbt_data.values[1].values
+                        local address = {}
+                        local symbol_type = ""
+
+                        local write_line = 1
+
+                        for k,v in ipairs(symbols) do
+                            if v.name == "symbolType" then
+                                if v.value == 0 then
+                                    symbol_type = "milkyway"
+                                elseif v.value == 1 then
+                                    symbol_type = "pegasus"
+                                elseif v.value == 2 then
+                                    symbol_type = "universe"
+                                end
+                                break
+                            end 
+                        end
+
+                        local type_box = drawFancyBox(19,15,36,17,"double_hori_dot",symbol_type,0x44AAFF)
+
+                        for k,v in ipairs(symbols) do
+                            if v.name:match("%d") then
+                                term.setCursor(dial_box.x+1,dial_box.y+write_line)
+                                gpu.setForeground(dial_box.fg)
+                                gpu.setBackground(dial_box.bg)
+                                term.write(v.name.." : "..v.value.." "..v.name:gsub("%D",""))
+                                address[#address+1] = {
+                                    symbol=v.value,
+                                    pos=v.name:gsub("%D",""),
+                                    name=symbols_list[symbol_type][v.value+1].name
+                                }
+                                write_line = write_line+1
+                                os.sleep(0.25)
+                            end
+                        end
+
+                        local function address_sort(a,b)
+                            if tonumber(a.pos) < tonumber(b.pos) then return true end
+                        end
+
+                        table.sort(address,address_sort)
+
+                        local number_only_address = {}
+
+                        for k,v in ipairs(address) do
+                            number_only_address[#number_only_address+1] = v.symbol
+                        end
+
+                        hideBox(dial_box)
+
+                        if #number_only_address == 8 or #number_only_address == 6 then
+                            local input_box = drawFancyBox(1,12,25,14,"double_hori_dot",nil,0x44AAFF)
+                            quickWrite(input_box.x+1, input_box.y, "New Name", 0x44AAFF)
+                            term.setCursor(input_box.x+1, input_box.y+1)
+                            local new_name = inputBox(23, filter.alphanumeric, true, 0xDDEEFF, base_background)
+                            
+
+                            gates_lib[#gates_lib+1] = {
+                                address = number_only_address,
+                                name = new_name
+                            }
+
+                            save_gates_lib()
+
+                            hideBox(input_box)
+
+                            scroll_pos = #gates_lib
+                        end
+                        hideBox(type_box)
+                    end
+                end
+            elseif checkClick(event_dat[3], event_dat[4],buttons.dial) then
+                local saved_address = gates_lib[scroll_pos+1].address
+                local symbol_type = sg.getGateType():lower()
+                local dial_box = drawFancyBox(1,12,18,21,"double_all",nil,0x44AAFF)
+                local address_to_call = {}
+                for k,v in ipairs(saved_address) do
+                    address_to_call[#address_to_call+1] = {name=symbols_list[symbol_type][v+1].name, symbol=k}
+                    quickWrite(dial_box.x+1, dial_box.y+k, address_to_call[#address_to_call].name, 0x44AAFF, base_background, 16)
+                end
+
+                debug_cb_msg("lib dial: "..table.concat(saved_address,"-"))
+                setData("last_address",saved_address)
+                speak("Dialing lib address.")
+
+                for k,v in ipairs(address_to_call) do
+                    local chevr_box = drawFancyBox(19,12,36,14,"double_hori_dot",v.name,0x44AAFF)
+
+                    term.setCursor(dial_box.x+1,dial_box.y+k)
+                    gpu.setForeground(0xFFAA44)
+                    gpu.setBackground(dial_box.bg)
+                    term.write(string.rep(" ",16))
+                    term.setCursor(dial_box.x+1,dial_box.y+k)
+                    term.write(v.name)
+
+                    sg.engageSymbol(v.name)
+                    debug_cb_msg("Engaging "..v.symbol.." / "..v.name)
+                    os.sleep(0.5)
+                    event.pull(15,"stargate_spin_chevron_engaged")
+
+                    term.setCursor(dial_box.x+1,dial_box.y+k)
+                    gpu.setForeground(0xDDEEFF)
+                    gpu.setBackground(dial_box.bg)
+                    term.write(string.rep(" ",16))
+                    term.setCursor(dial_box.x+1,dial_box.y+k)
+                    term.write(v.name)
+
+                    hideBox(chevr_box)
+                end
+                local chevr_box = drawFancyBox(19,12,36,14,"double_hori_dot",symbols_list[symbol_type].origin,0x44AAFF)
+
+                sg.engageSymbol(symbols_list[symbol_type].origin)
+                event.pull(20,"stargate_spin_chevron_engaged")
+                hideBox(chevr_box)
+
+                os.sleep(1)
+                
+                sg.engageGate()
+
+                chevr_box = drawFancyBox(19,12,36,14,"double_hori_dot","Connecting",0x44AAFF)
+                event.pull(8,"stargate_wormhole_stabilized")
+
+                hideBox(chevr_box)
+                hideBox(dial_box)
+            elseif checkClick(event_dat[3], event_dat[4],buttons.exit) then
+                hideBox(lib_box)
+                return
+            elseif checkClick(event_dat[3], event_dat[4],buttons.del) then
+                gates_lib[scroll_pos+1] = nil
+                save_gates_lib()
+
+                scroll_pos = 0
+            end
+        end
+    end
+
+
+end)
+drawFancyBox(36,1,44,3,"double_all","Library",0xDDEEFF)
