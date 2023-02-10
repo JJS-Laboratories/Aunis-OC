@@ -495,13 +495,13 @@ threads.gateOpening = thread.create(function()
         local connect_box
         if isOutgoing then
             speak("Warning! Outgoing star gate connection!")
-            quickWrite(1,finalY-1,"Outgoing: "..table.concat(getData("last_address"),"-"),0x44AAFF, base_background, 33)
+            quickWrite(1,finalY,"Outgoing: "..table.concat(getData("last_address"),"-"),0x44AAFF, base_background, 33)
         else
             speak("Warning! Incoming star gate connection!")
-            quickWrite(1,finalY-1,"Incoming!",0xFF2222, base_background, 33)
+            quickWrite(1,finalY,"Incoming!",0xFF2222, base_background, 33)
         end
         event.pull("stargate_wormhole_closed_fully")
-        quickWrite(1,finalY-1," ",0xFF2222, base_background, 33)
+        quickWrite(1,finalY," ",0xFF2222, base_background, 33)
 
         speak("Star gate connection lost.")
     end
