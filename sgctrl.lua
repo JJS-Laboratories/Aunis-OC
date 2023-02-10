@@ -903,6 +903,8 @@ registerButton(36,1,44,3,"library",function(name)
 
     quickWrite(lib_box.x+2, lib_box.y+1, (scroll_pos+1).."/"..#gates_lib, 0xDDEEFF, base_background, 7)
 
+    local show_address = false
+
     while true do
         local event_dat = {event.pull()}
         if event_dat[1] == "scroll" then
@@ -924,13 +926,32 @@ registerButton(36,1,44,3,"library",function(name)
                 end
             end
 
+            
             if gates_lib[scroll_pos+1] ~= nil then
-                quickWrite(lib_box.x+1, lib_box.y+2, gates_lib[scroll_pos+1].name or "Empty", 0xDDEEFF, 0x001122, 23)
+                if show_address then
+                    quickWrite(lib_box.x+1, lib_box.y+2, table.concat(gates_lib[scroll_pos+1].address, "-") or "Empty", 0xDDEEFF, 0x001122, 23)
+                else
+                    quickWrite(lib_box.x+1, lib_box.y+2, gates_lib[scroll_pos+1].name or "Empty", 0xDDEEFF, 0x001122, 23)
+                end
             else
                 quickWrite(lib_box.x+1, lib_box.y+2, "Empty", 0xDDEEFF, 0x001122, 23)
             end
 
             quickWrite(lib_box.x+2, lib_box.y+1, (scroll_pos+1).."/"..#gates_lib, 0xDDEEFF, base_background, 7)
+        end
+
+        if event_dat[1] == "key_down" and event_dat[4] == kb.keys.lshift then
+            show_address = true
+            thread.create(function()
+                os.sleep()
+                computer.pushSignal("scroll","kk",1,1,0,"kk")
+            end)
+        elseif event_dat[1] == "key_up" and event_dat[4] == kb.keys.lshift then
+            show_address = false
+            thread.create(function()
+                os.sleep()
+                computer.pushSignal("scroll","kk",1,1,0,"kk")
+            end)
         end
 
         if event_dat[1] == "touch" then
@@ -1181,6 +1202,18 @@ registerButton(36,1,44,3,"library",function(name)
             elseif checkClick(event_dat[3], event_dat[4],buttons.exit) then
                 hideBox(lib_box)
                 return
+            elseif checkClick(event_dat[3], event_dat[4],buttons.edit) then
+                local input_box = drawFancyBox(1,12,25,14,"double_hori_dot",nil,0x44AAFF)
+                quickWrite(input_box.x+1, input_box.y, "New Name", 0x44AAFF)
+                term.setCursor(input_box.x+1, input_box.y+1)
+                local new_name = inputBox(23, filter.alphanumeric, true, 0xDDEEFF, base_background)
+                
+
+                gates_lib[scroll_pos+1].name = new_name
+
+                save_gates_lib()
+
+                hideBox(input_box)
             elseif checkClick(event_dat[3], event_dat[4],buttons.del) then
                 table.remove(gates_lib,scroll_pos+1)
                 save_gates_lib()
@@ -1188,7 +1221,7 @@ registerButton(36,1,44,3,"library",function(name)
             end
 
             thread.create(function()
-                os.sleep(0.25)
+                os.sleep(0)
                 computer.pushSignal("scroll","kk",1,1,0,"kk")
             end)
         end
