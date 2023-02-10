@@ -1098,7 +1098,7 @@ registerButton(36,1,44,3,"library",function(name)
 
                         for k,v in ipairs(address) do
                             number_only_address[#number_only_address+1] = v.symbol
-                            quickWrite(dial_box.x+1, dial_box.y+#number_only_address, symbols_list[symbol_type][v.symbol].name, dial_box.fg, dial_box.bg, 16)
+                            quickWrite(dial_box.x+1, dial_box.y+#number_only_address, symbols_list[symbol_type][v.symbol+1].name, dial_box.fg, dial_box.bg, 16)
                             os.sleep(0.0625/2)
                         end
 
