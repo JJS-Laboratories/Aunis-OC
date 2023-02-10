@@ -495,13 +495,13 @@ threads.gateOpening = thread.create(function()
         local connect_box
         if isOutgoing then
             speak("Warning! Outgoing star gate connection!")
-            connect_box = drawFancyBox(1,finalY-2,40,finalY,"double_all","Outgoing: "..table.concat(getData("last_address"),"-"),0x44AAFF)
+            quickWrite(1,finalY-1,"Outgoing: "..table.concat(getData("last_address"),"-"),0x44AAFF, base_background, 33)
         else
             speak("Warning! Incoming star gate connection!")
-            connect_box = drawFancyBox(1,finalY-2,40,finalY,"double_all","Incoming!",0xFF2222)
+            quickWrite(1,finalY-1,"Incoming!",0xFF2222, base_background, 33)
         end
         event.pull("stargate_wormhole_closed_fully")
-        hideBox(connect_box)
+        quickWrite(1,finalY-1," ",0xFF2222, base_background, 33)
 
         speak("Star gate connection lost.")
     end
@@ -901,6 +901,8 @@ registerButton(36,1,44,3,"library",function(name)
         quickWrite(lib_box.x+1, lib_box.y+2, "Empty", 0xDDEEFF, 0x001122, 23)
     end
 
+    quickWrite(lib_box.x+2, lib_box.y+1, (scroll_pos+1).."/"..#gates_lib, 0xDDEEFF, base_background, 7)
+
     while true do
         local event_dat = {event.pull()}
         if event_dat[1] == "scroll" then
@@ -914,7 +916,11 @@ registerButton(36,1,44,3,"library",function(name)
                 if scroll_pos > 0 then
                     scroll_pos = scroll_pos-1
                 elseif scroll_pos <= 0 then
-                    scroll_pos = #gates_lib-1
+                    if #gates_lib > 0 then
+                        scroll_pos = #gates_lib-1
+                    else
+                        scroll_pos = 0
+                    end
                 end
             end
 
@@ -923,6 +929,8 @@ registerButton(36,1,44,3,"library",function(name)
             else
                 quickWrite(lib_box.x+1, lib_box.y+2, "Empty", 0xDDEEFF, 0x001122, 23)
             end
+
+            quickWrite(lib_box.x+2, lib_box.y+1, (scroll_pos+1).."/"..#gates_lib, 0xDDEEFF, base_background, 7)
         end
 
         if event_dat[1] == "touch" then
@@ -1014,7 +1022,7 @@ registerButton(36,1,44,3,"library",function(name)
                         save_gates_lib()
 
                         hideBox(name_box)
-                        scroll_pos = #gates_lib
+                        scroll_pos = #gates_lib-1
                     end
                 elseif code == kb.keys["numpad2"] or code == kb.keys["2"] then
                     local last_address = getData("last_address")
@@ -1032,7 +1040,7 @@ registerButton(36,1,44,3,"library",function(name)
                         save_gates_lib()
 
                         hideBox(input_box)
-                        scroll_pos = #gates_lib
+                        scroll_pos = #gates_lib-1
                     end
                 elseif code == kb.keys["numpad3"] or code == kb.keys["3"] then
 
@@ -1076,7 +1084,7 @@ registerButton(36,1,44,3,"library",function(name)
                                     name=symbols_list[symbol_type][v.value+1].name
                                 }
                                 write_line = write_line+1
-                                os.sleep(0.25)
+                                os.sleep(0.0625)
                             end
                         end
 
@@ -1090,9 +1098,10 @@ registerButton(36,1,44,3,"library",function(name)
 
                         for k,v in ipairs(address) do
                             number_only_address[#number_only_address+1] = v.symbol
+                            quickWrite(dial_box.x+1, dial_box.y+#number_only_address, symbols_list[symbol_type][v.symbol].name, dial_box.fg, dial_box.bg, 16)
+                            os.sleep(0.0625/2)
                         end
 
-                        hideBox(dial_box)
 
                         if #number_only_address == 8 or #number_only_address == 6 then
                             local input_box = drawFancyBox(1,12,25,14,"double_hori_dot",nil,0x44AAFF)
@@ -1110,9 +1119,10 @@ registerButton(36,1,44,3,"library",function(name)
 
                             hideBox(input_box)
 
-                            scroll_pos = #gates_lib
+                            scroll_pos = #gates_lib-1
                         end
                         hideBox(type_box)
+                        hideBox(dial_box)
                     end
                 end
             elseif checkClick(event_dat[3], event_dat[4],buttons.dial) then
@@ -1172,11 +1182,15 @@ registerButton(36,1,44,3,"library",function(name)
                 hideBox(lib_box)
                 return
             elseif checkClick(event_dat[3], event_dat[4],buttons.del) then
-                gates_lib[scroll_pos+1] = nil
+                table.remove(gates_lib,scroll_pos+1)
                 save_gates_lib()
-
                 scroll_pos = 0
             end
+
+            thread.create(function()
+                os.sleep(0.25)
+                computer.pushSignal("scroll","kk",1,1,0,"kk")
+            end)
         end
     end
 
