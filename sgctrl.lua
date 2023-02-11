@@ -488,6 +488,8 @@ end
 local function getNBTFromKey(data,key)
     for k,v in pairs(data) do
         if v.name == key then
+            debug_cb_msg("Found Key "..key)
+            debug_cb_msg(srz.serialize(v))
             return v
         end
     end
@@ -730,7 +732,7 @@ registerButton(9,1,19,3,"autodial",function(name)
 
         if stack.name == "jsg:notebook" then
             local selected = getNBTFromKey(nbt_data.values,"selected").value
-            symbols = nbt_data.values[1].values[selected+1].values[1].values
+            symbols = getNBTFromKey(nbt_data.values,"addressList").values[selected+1].values[1].values 
         else
             symbols = nbt_data.values[1].values
         end
@@ -742,7 +744,7 @@ registerButton(9,1,19,3,"autodial",function(name)
         
         if stack.name == "jsg:notebook" then
             local selected = getNBTFromKey(nbt_data.values,"selected").value
-            has_upgrade = (nbt_data.values[1].values[selected+1].values[7].value == 1)
+            has_upgrade = (getNBTFromKey(nbt_data.values,"addressList").values[selected+1].values[7].value == 1)
         else
             has_upgrade = (nbt_data.values[5].value == 1)
         end
@@ -1166,7 +1168,7 @@ registerButton(36,1,44,3,"library",function(name)
 
                         if stack.name == "jsg:notebook" then
                             local selected = getNBTFromKey(nbt_data.values,"selected").value
-                            symbols = nbt_data.values[1].values[selected+1].values[1].values
+                            symbols = getNBTFromKey(nbt_data.values,"addressList").values[selected+1].values[1].values 
                         else
                             symbols = nbt_data.values[1].values
                         end
