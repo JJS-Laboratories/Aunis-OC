@@ -485,6 +485,15 @@ local function quickWrite(x,y,txt,fg,bg,clearLength)
     gpu.setBackground(old_bg)
 end
 
+local function getNBTFromKey(data,key)
+    for k,v in pairs(data) do
+        if v.name == key then
+            return v
+        end
+    end
+    return nil
+end
+
 local threads = {}
 
 threads.clickListener = thread.create(function()
@@ -717,11 +726,26 @@ registerButton(9,1,19,3,"autodial",function(name)
         
         local nbt_data = nbt.decode(zzlib.gunzip(stack.tag))
 
-        local symbols = nbt_data.values[1].values
+        local symbols
+
+        if stack.name == "jsg:notebook" then
+            local selected = getNBTFromKey(nbt_data.values,"selected").value
+            symbols = nbt_data.values[1].values[selected+1].values[1].values
+        else
+            symbols = nbt_data.values[1].values
+        end
+
         local address = {}
         local symbol_type = ""
 
-        local has_upgrade = (nbt_data.values[5].value == 1)
+        local has_upgrade
+        
+        if stack.name == "jsg:notebook" then
+            local selected = getNBTFromKey(nbt_data.values,"selected").value
+            has_upgrade = (nbt_data.values[1].values[selected+1].values[7].value == 1)
+        else
+            has_upgrade = (nbt_data.values[5].value == 1)
+        end
 
         local write_line = 1
 
@@ -1138,7 +1162,15 @@ registerButton(36,1,44,3,"library",function(name)
                         
                         local nbt_data = nbt.decode(zzlib.gunzip(stack.tag))
 
-                        local symbols = nbt_data.values[1].values
+                        local symbols
+
+                        if stack.name == "jsg:notebook" then
+                            local selected = getNBTFromKey(nbt_data.values,"selected").value
+                            symbols = nbt_data.values[1].values[selected+1].values[1].values
+                        else
+                            symbols = nbt_data.values[1].values
+                        end
+                        
                         local address = {}
                         local symbol_type = ""
 
